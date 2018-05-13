@@ -41,6 +41,9 @@ setup(
     package_dir={'hpack': 'hpack'},
     include_package_data=True,
     license='MIT License',
+    install_requires=[
+        'future'
+    ]
     classifiers=[
         'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Developers',

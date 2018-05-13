@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # flake8: noqa
 from collections import deque
+from itertools import islice
 import logging
 
 from .exceptions import InvalidTableIndex
@@ -216,6 +217,60 @@ class HeaderTable(object):
             cursize -= table_entry_size(name, value)
             log.debug("Evicting %s: %s from the header table", name, value)
         self._current_size = cursize
+
+class QPACKHeaderTable(HeaderTable):
+    def __init__(self):
+        super(QPACKHeaderTable, self).__init__()
+        self.largest_ref = 0
+
+    def get_by_index(self, index, static):
+        if static:
+            if index > HeaderTable.STATIC_TABLE_LENGTH:
+                raise InvalidTableIndex("Invalid static table index %d" % index)
+            return HeaderTable.STATIC_TABLE[index - 1]
+        else:
+            if index > self.largest_ref or index < self.largest_ref - len(self.dynamic_entries):
+                raise InvalidTableIndex("Invalid dynamic table index %d" % index)
+            rel = index - self.largest_ref
+            return self.dynamic_entries[rel]
+        
+
+    def add(self, name, value):
+        super(QPACKHeaderTable, self).add(name, value)
+        self.largest_ref += 1
+
+    def search(self, name, value, start=None):
+        """
+        Searches the table for the entry specified by name
+        and value
+
+        Returns one of the following:
+            - ``None``, no match at all
+            - ``(index, name, None)`` for partial matches on name only.
+            - ``(index, name, value)`` for perfect matches.
+        """
+        partial = None
+
+        header_name_search_result = HeaderTable.STATIC_TABLE_MAPPING.get(name)
+        if header_name_search_result:
+            index = header_name_search_result[1].get(value)
+            if index is not None:
+                return True, index, name, value
+            else:
+                partial = (True, header_name_search_result[0], name, None)
+        start = 0 if start is None else self.largest_ref - start
+        if start > 0
+            entries = islice(self.dynamic_entries, start, None)
+        else:
+            entries = self.dynamic_entries
+
+        for (i, (n, v)) in enumerate(entries, start):
+            if n == name:
+                if v == value:
+                    return False, self.largest_ref - i, n, v
+                elif partial is None:
+                    partial = (False, self.largest_ref - i, n, None)
+        return partial
 
 
 def _build_static_table_mapping():
